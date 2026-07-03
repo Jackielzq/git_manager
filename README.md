@@ -26,6 +26,8 @@ npm start
 
 浏览器打开 `http://localhost:3000`
 
+或双击 `launch.bat` 一键启动并自动打开浏览器。
+
 ## 项目结构
 
 ```
