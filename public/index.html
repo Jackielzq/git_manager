@@ -222,6 +222,18 @@ body {
   border: 1px dashed var(--border); margin-bottom: 12px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+.pick-area {
+  display: flex; align-items: center; margin-bottom: 12px;
+}
+.pick-area .pick-btn {
+  padding: 8px 16px; border-radius: 6px; background: var(--btn-bg);
+  border: 1px solid var(--border); color: var(--text); cursor: pointer;
+  font-size: 13px; white-space: nowrap; transition: all .15s;
+  display: flex; align-items: center; gap: 6px;
+}
+.pick-area .pick-btn:hover { background: var(--btn-hover); border-color: var(--accent); }
+.pick-area .pick-btn svg { width: 14px; height: 14px; fill: var(--text); }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; flex-shrink: 0; }
 .modal-actions button {
   padding: 8px 18px; border-radius: 6px; font-size: 13px; cursor: pointer;
@@ -311,15 +323,19 @@ body {
     <label>项目名称</label>
     <input type="text" id="addName" placeholder="输入项目名称">
     <label>仓库目录</label>
-    <input type="text" id="addDir" placeholder="输入或粘贴完整路径，如 D:\\projects\\my-repo" oninput="checkDir()">
-    <div class="selected-path" id="dirHint" style="border-color:var(--border);">输入仓库路径后自动检测</div>
+    <div class="pick-area">
+      <button class="pick-btn" onclick="pickFolder()">
+        <svg viewBox="0 0 16 16"><path d="M.513 1.513A1.75 1.75 0 0 1 1.75 1h3.5c.55 0 1.07.26 1.4.7l.9 1.2a.25.25 0 0 0 .2.1H13a1 1 0 0 1 1 1v.5H2.75a.75.75 0 0 0 0 1.5h11.978a1 1 0 0 1 .994 1.117L15 13.25A1.75 1.75 0 0 1 13.25 15H2.75A1.75 1.75 0 0 1 1 13.25V3.25c0-.464.184-.91.513-1.237ZM2.75 13.5a.25.25 0 0 0 .25.25h10.5a.25.25 0 0 0 .25-.25V5.5H2.75v8Z"/></svg>
+        选择文件夹
+      </button>
+    </div>
+    <div class="selected-path" id="selectedPath">尚未选择目录</div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeAddModal()">取消</button>
       <button class="btn-confirm" id="confirmAddBtn" onclick="addProject()" disabled>确认添加</button>
     </div>
   </div>
 </div>
-
 <div class="modal-overlay" id="commitModal">
   <div class="modal">
     <h3><svg viewBox="0 0 16 16"><path d="M9.53 1.282a.75.75 0 0 1 .94 0l4.97 4.5a.75.75 0 1 1-.94 1.168L10 3.215v7.845a.75.75 0 0 1-1.5 0V3.215l-4.53 3.735a.75.75 0 0 1-.94-1.168l4.97-4.5ZM2.5 13a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 0 1.5h-9.5A.75.75 0 0 1 2.5 13Z"/></svg>提交并推送</h3>
@@ -406,76 +422,46 @@ function selectProject(id) {
 
 function showAddModal() {
   document.getElementById("addName").value = "";
-  selectedBrowsePath = "";
   document.getElementById("selectedPath").textContent = "尚未选择目录";
+  document.getElementById("selectedPath").style.borderColor = "var(--border)";
+  document.getElementById("selectedPath").style.color = "var(--text-muted)";
   document.getElementById("confirmAddBtn").disabled = true;
   document.getElementById("addModal").classList.add("show");
   setTimeout(function() { document.getElementById("addName").focus(); }, 100);
+}
+
+async function pickFolder() {
+  document.getElementById("selectedPath").textContent = "正在打开选择器...";
+  document.getElementById("selectedPath").style.color = "var(--text-muted)";
+  try {
+    var res = await fetch("/api/pick-folder", { method: "POST" });
+    var data = await res.json();
+    if (data.path) {
+      document.getElementById("selectedPath").textContent = data.path;
+      document.getElementById("selectedPath").style.color = "var(--accent)";
+      document.getElementById("selectedPath").style.borderColor = "var(--accent)";
+      document.getElementById("confirmAddBtn").disabled = false;
+    } else {
+      document.getElementById("selectedPath").textContent = "未选择目录（已取消）";
+      document.getElementById("selectedPath").style.color = "var(--text-muted)";
+      document.getElementById("selectedPath").style.borderColor = "var(--border)";
+      document.getElementById("confirmAddBtn").disabled = true;
+    }
+  } catch(e) {
+    document.getElementById("selectedPath").textContent = "选择器启动失败，请手动输入路径";
+    document.getElementById("selectedPath").style.color = "var(--red)";
+  }
 }
 
 function closeAddModal() {
   document.getElementById("addModal").classList.remove("show");
 }
 
-async function browseTo(dir) {
-  var listEl = document.getElementById("browseList");
-  var pathEl = document.getElementById("browsePath");
-  var backBtn = document.getElementById("browseBack");
-  listEl.innerHTML = '<div class="loading">加载中...</div>';
-
-  var url = "/api/browse";
-  if (dir) url += "?path=" + encodeURIComponent(dir);
-  var res = await fetch(url);
-  var data = await res.json();
-
-  if (data.error) {
-    listEl.innerHTML = '<div class="empty">' + esc(data.error) + '</div>';
-    return;
-  }
-
-  // Track previous path for back navigation
-  if (pathEl.textContent && pathEl.textContent !== "加载中..." && pathEl.textContent !== dir) {
-    browseHistory.push(pathEl.textContent);
-  }
-
-  pathEl.textContent = data.path;
-  backBtn.disabled = !data.parent;
-
-  // Update selected path
-  selectedBrowsePath = data.path;
-  document.getElementById("selectedPath").textContent = data.path;
-  document.getElementById("confirmAddBtn").disabled = false;
-
-  if (data.dirs.length === 0) {
-    listEl.innerHTML = '<div class="empty">此目录下无子目录</div>';
-    return;
-  }
-
-  listEl.innerHTML = data.dirs.map(function(d) {
-    var isDrive = !!(d.match(/^[A-Z]:\\?$/));
-    var name = isDrive ? d : d.split("\\").pop().split("/").pop();
-    var cssClass = isDrive ? "browse-item drive-item" : "browse-item";
-    var icon = isDrive ? "💿" : "📁";
-    return '<div class="' + cssClass + '" onclick="browseTo(\'' + escAttr(d) + '\')">' +
-      '<span class="folder-icon">' + icon + '</span>' +
-      '<span class="folder-name">' + esc(name) + '</span>' +
-      '</div>';
-  }).join("");
-}
-
-function escAttr(s) { return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'"); }
-
-function browseUp() {
-  if (browseHistory.length > 0) {
-    browseTo(browseHistory.pop());
-  }
-}
-
 function addProject() {
   var name = document.getElementById("addName").value.trim();
-  var dir = document.getElementById("addDir").value.trim();
+  var dir = document.getElementById("selectedPath").textContent;
   if (!name) return alert("请填写项目名称");
-  if (!dir) return alert("请输入仓库目录");
+  if (!dir || dir === "尚未选择目录" || dir.indexOf("失败") >= 0) return alert("请先选择仓库目录");
   fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -60,6 +60,35 @@ app.get('/api/browse', (req, res) => {
   res.json({ path: absDir, hasDotGit });
 });
 
+
+// 原生文件夹选择器 (PowerShell + start /wait)
+app.post('/api/pick-folder', (req, res) => {
+  const psFile = path.join(__dirname, '_pick.ps1');
+  const outFile = path.join(__dirname, '_pick_out.txt');
+
+  // Simple script: no Chinese strings to avoid encoding issues
+  const script = 'Add-Type -AssemblyName System.Windows.Forms\r\n' +
+    '$d=New-Object System.Windows.Forms.FolderBrowserDialog\r\n' +
+    '$d.Description="Select Git Repository Folder"\r\n' +
+    '$d.ShowNewFolderButton=$false\r\n' +
+    '$r=$d.ShowDialog()\r\n' +
+    'if($r -eq "OK"){$d.SelectedPath | Out-File -FilePath (Join-Path $PSScriptRoot "_pick_out.txt") -Encoding utf8}';
+  fs.writeFileSync(psFile, script, 'utf-8');
+  try { fs.unlinkSync(outFile); } catch (e) {}
+
+  // cmd /c start /wait forces a NEW VISIBLE WINDOW
+  const cmd = 'cmd /c start "FolderPicker" /wait powershell -NoProfile -ExecutionPolicy Bypass -File "' + psFile + '"';
+  exec(cmd, { timeout: 120000, windowsHide: false }, (err) => {
+    try { fs.unlinkSync(psFile); } catch (e) {}
+    let selected = '';
+    try {
+      selected = fs.readFileSync(outFile, 'utf-8').trim();
+      fs.unlinkSync(outFile);
+    } catch (e) {}
+    res.json({ path: selected || null, cancelled: !selected });
+  });
+});
+
 const COMMANDS = {
   status: 'git status --short -b',
   pull: 'git pull',
