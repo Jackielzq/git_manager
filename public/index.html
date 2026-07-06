@@ -190,6 +190,14 @@ body {
   border-radius: 4px; border-left: 2px solid var(--red);
 }
 .output-entry .cmd-empty { color: var(--text-muted); font-style: italic; padding: 8px 12px; }
+.sync-banner {
+  padding: 6px 10px; border-radius: 4px; margin-bottom: 6px;
+  font-size: 12px; font-weight: 500; font-family: "Segoe UI", system-ui, sans-serif;
+}
+.sync-banner.sync-ok { background: color-mix(in srgb, var(--green) 10%, transparent); color: var(--green); }
+.sync-banner.sync-ahead { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.sync-banner.sync-behind { background: color-mix(in srgb, var(--red) 10%, transparent); color: var(--red); }
+.sync-banner.sync-diverged { background: color-mix(in srgb, var(--yellow) 12%, transparent); color: var(--yellow); }
 .spinner {
   display: inline-block; width: 12px; height: 12px;
   border: 2px solid var(--border); border-top-color: var(--accent);
@@ -600,6 +608,25 @@ async function runGit(action, extraMsg) {
       '<span class="cmd-badge ' + badgeClass + '">' + badgeText + '</span>' +
       '<span class="cmd-command">$ git ' + label + '</span>' +
       '</div>';
+
+    // Parse sync status for Status action
+    if (action === "status" && data.success && data.output) {
+      var firstLine = data.output.split("\n")[0];
+      var aheadMatch = firstLine.match(/\[ahead (\d+)\]/);
+      var behindMatch = firstLine.match(/\[behind (\d+)\]/);
+      var hasRemote = firstLine.indexOf("...") >= 0;
+      if (hasRemote) {
+        if (behindMatch && aheadMatch) {
+          html += '<div class="sync-banner sync-diverged">⚠️ 分歧：本地领先 ' + aheadMatch[1] + ' 个提交，远程领先 ' + behindMatch[1] + ' 个提交</div>';
+        } else if (behindMatch) {
+          html += '<div class="sync-banner sync-behind">⚠️ 本地落后 ' + behindMatch[1] + ' 个提交，请先 Pull 再操作！</div>';
+        } else if (aheadMatch) {
+          html += '<div class="sync-banner sync-ahead">✅ 本地领先 ' + aheadMatch[1] + ' 个提交，可以 Push</div>';
+        } else {
+          html += '<div class="sync-banner sync-ok">✅ 已同步，当前为最新版本</div>';
+        }
+      }
+    }
 
     if (data.success) {
       if (data.output) html += '<div class="cmd-output" style="color:var(--green);border-left-color:var(--green);">' + esc(data.output) + '</div>';
