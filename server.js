@@ -50,6 +50,19 @@ app.delete('/api/projects/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// 更新项目名称
+app.put('/api/projects/:id', (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'name 为必填' });
+  let projects = loadProjects();
+  const id = parseInt(req.params.id, 10);
+  const project = projects.find(p => p.id === id);
+  if (!project) return res.status(404).json({ error: '项目不存在' });
+  project.name = name;
+  saveProjects(projects);
+  res.json({ ok: true });
+});
+
 // 目录检测（用于前端实时验证路径）
 app.get('/api/browse', (req, res) => {
   let dir = req.query.path || '';

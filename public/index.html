@@ -97,6 +97,17 @@ body {
   line-height: 1;
 }
 .project-item:hover .del-btn { opacity: 1; }
+.project-item .edit-btn {
+  opacity: 0; background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 13px; padding: 0 3px; transition: opacity .15s;
+  line-height: 1;
+}
+.project-item:hover .edit-btn { opacity: 1; }
+.project-item .edit-input {
+  flex: 1; background: var(--bg-input); border: 1px solid var(--accent);
+  border-radius: 4px; color: var(--text); font-size: 13px; padding: 2px 6px;
+  outline: none; font-family: inherit; min-width: 0;
+}
 .sidebar-footer { padding: 12px; border-top: 1px solid var(--border); }
 .sidebar-footer .add-proj-btn {
   width: 100%; padding: 9px; border-radius: 6px;
@@ -288,8 +299,12 @@ body {
         Pull
       </button>
       <button class="action-btn danger" onclick="showCommitModal()">
+        <svg viewBox="0 0 16 16"><path d="M11.75 4.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm-2.25.75a2.25 2.25 0 1 1 3 2.122V9A2.5 2.5 0 0 1 10 11.5H6a1 1 0 0 0-1 1v.872a2.25 2.25 0 1 1-1.5 0V6.628a2.25 2.25 0 1 1 1.942-1.058A3.968 3.968 0 0 0 6 5.5h4a1 1 0 0 0 1-1V4.372a2.25 2.25 0 0 1-1.5-.122ZM5.75 3.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM5.75 14.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z"/></svg>
+        提交推送
+      </button>
+      <button class="action-btn" onclick="runGit('push')">
         <svg viewBox="0 0 16 16"><path d="M9.53 1.282a.75.75 0 0 1 .94 0l4.97 4.5a.75.75 0 1 1-.94 1.168L10 3.215v7.845a.75.75 0 0 1-1.5 0V3.215l-4.53 3.735a.75.75 0 0 1-.94-1.168l4.97-4.5ZM2.5 13a.75.75 0 0 1 .75-.75h9.5a.75.75 0 0 1 0 1.5h-9.5A.75.75 0 0 1 2.5 13Z"/></svg>
-        Push
+        推送
       </button>
       <button class="action-btn" onclick="runGit('branch')">
         <svg viewBox="0 0 16 16"><path d="M11.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm-2.25.75a2.25 2.25 0 1 1 3 2.122V10a2.5 2.5 0 0 1-2.5 2.5H7.935A2.251 2.251 0 1 1 5.5 11h4.5a1 1 0 0 0 1-1V5.372a2.25 2.25 0 0 1-1.5-2.122ZM5.75 12.25a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 9.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z"/></svg>
@@ -390,8 +405,9 @@ function renderList() {
     return;
   }
   el.innerHTML = projects.map(function(p) {
-    return '<div class="project-item' + (activeId === p.id ? " active" : "") + '" onclick="selectProject(' + p.id + ')">' +
-      '<span class="name">' + esc(p.name) + '</span>' +
+    return '<div class="project-item' + (activeId === p.id ? " active" : "") + '" onclick="selectProject(' + p.id + ')" id="proj-' + p.id + '">' +
+      '<span class="name" id="name-' + p.id + '">' + esc(p.name) + '</span>' +
+      '<button class="edit-btn" onclick="event.stopPropagation();startEdit(' + p.id + ')" title="重命名">✎</button>' +
       '<button class="del-btn" onclick="event.stopPropagation();delProject(' + p.id + ')" title="删除">&times;</button>' +
       '</div>';
   }).join("");
@@ -477,6 +493,51 @@ async function delProject(id) {
   if (!confirm("确定删除该项目？")) return;
   await fetch("/api/projects/" + id, { method: "DELETE" });
   await loadProjects();
+}
+
+function startEdit(id) {
+  var p = projects.find(function(x) { return x.id === id; });
+  if (!p) return;
+  var span = document.getElementById("name-" + id);
+  if (!span) return;
+  var input = document.createElement("input");
+  input.type = "text";
+  input.value = p.name;
+  input.className = "edit-input";
+  input.id = "edit-" + id;
+  input.onkeydown = function(e) {
+    if (e.key === "Enter") { e.preventDefault(); saveEdit(id); }
+    if (e.key === "Escape") { e.preventDefault(); cancelEdit(id); }
+  };
+  input.onblur = function() { setTimeout(function() { cancelEdit(id); }, 150); };
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+async function saveEdit(id) {
+  var input = document.getElementById("edit-" + id);
+  if (!input) return;
+  var newName = input.value.trim();
+  if (!newName) return cancelEdit(id);
+  var res = await fetch("/api/projects/" + id, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: newName })
+  });
+  if (!res.ok) return alert("更新失败");
+  await loadProjects();
+  // Restore active selection display
+  if (activeId === id) {
+    var p = projects.find(function(x) { return x.id === id; });
+    if (p) {
+      document.getElementById("projName").textContent = p.name;
+    }
+  }
+}
+
+function cancelEdit(id) {
+  loadProjects();
 }
 
 function showCommitModal() {
