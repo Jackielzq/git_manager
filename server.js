@@ -103,7 +103,7 @@ app.post('/api/pick-folder', (req, res) => {
 });
 
 const COMMANDS = {
-  status: 'git status --short -b',
+  status: 'git fetch --quiet & git status --short -b',
   pull: 'git pull',
   push: 'git push',
   fetch: 'git fetch --all --prune',
